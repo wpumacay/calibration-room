@@ -15,5 +15,10 @@
   <worldbody>
     <light pos="1 -1 1.5" dir="-1 1 -1" diffuse="0.5 0.5 0.5" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <body name="ball" pos="0 0 1">
+      <freejoint/>
+      <geom type="sphere" size=".1" />
+    </body>
   </worldbody>
 </mujoco>
