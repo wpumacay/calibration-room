@@ -89,6 +89,7 @@ def callback(keycode) -> None:
 
 def get_instances_per_category(category: str) -> List[Path]:
     base_path = str((ASSETS_DIR / "ThorAssets").resolve())
+    print(f"Looking for models in this folder: {base_path}")
     path_candidates = [Path(path) for path in glob.glob(f"{base_path}/**/*.xml", recursive=True)]
     pattern = re.compile(category + r"_\d+")
     instances = []
@@ -516,7 +517,7 @@ def main() -> int:
     parser.add_argument(
         "--category",
         type=str,
-        default="Fridge",
+        default="Microwave",
         help="The category of assets to be load for the calibration test",
     )
     parser.add_argument(
@@ -544,6 +545,9 @@ def main() -> int:
     g_context.num_items_in_category = len(g_context.instances_per_category)
     g_context.use_table = not args.notable
 
+    print(f"Loading model category: {g_context.category_id}")
+    print(f"Index in category: {g_context.index_in_category}")
+    print(f"Instances per category: {g_context.instances_per_category}")
     print(f"Loading model: {g_context.instances_per_category[g_context.index_in_category]}")
 
     # TODO(wilbert): might need to set simulation parameters to get a stable stretch robot simulation
