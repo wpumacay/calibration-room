@@ -1,3 +1,5 @@
 mujoco
 imgui
 PyOpenGL
+scipy
+open3d==0.18.0

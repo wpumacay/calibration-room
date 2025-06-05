@@ -185,3 +185,6 @@ typings/
 # Exclude ThorAssets and Franka assets
 assets/ThorAssets/
 assets/franka_fr3/
+
+# Exclude generated model.xml from main demo
+model.xml
