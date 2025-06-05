@@ -1,2 +1,3 @@
-mujoco==3.2.6
-imgui>=2.0.0
+mujoco
+imgui
+PyOpenGL

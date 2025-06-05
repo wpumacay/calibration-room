@@ -181,3 +181,7 @@ typings/
 
 # Exclude .DS_Store files
 .DS_Store
+
+# Exclude ThorAssets and Franka assets
+assets/ThorAssets/
+assets/franka_fr3/
