@@ -1,6 +1,7 @@
 import argparse
 import glob
 import re
+import multiprocessing
 from multiprocessing import Process, Value, Lock
 from multiprocessing.sharedctypes import Synchronized
 from multiprocessing.synchronize import Lock as LockType
@@ -635,4 +636,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     raise SystemExit(main())
