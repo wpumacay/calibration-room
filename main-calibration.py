@@ -82,14 +82,16 @@ class Context:
         
         self.use_table: bool = False
 
+        self.target_pos_x = 0.5
+        self.target_pos_y = 0.0
+        self.target_pos_z = 0.5
+
 
 g_context: Context = Context()
 
 
 def callback(keycode) -> None:
     global g_context
-
-    # print(f"keycode: {keycode}, chr: {chr(keycode)}")
 
     if chr(keycode) == " ":
         g_context.index_in_category = (
@@ -104,6 +106,18 @@ def callback(keycode) -> None:
             f"Reloading current model: {g_context.instances_per_category[g_context.index_in_category]}"
         )
         g_context.dirty_reload = True
+    elif chr(keycode) == "ć":
+        print("Moving end effector to the left")
+        g_context.target_pos_x -= 0.1
+    elif chr(keycode) == "Ć":
+        print("Moving end effector to the right")
+        g_context.target_pos_x += 0.1
+    elif chr(keycode) == "ĉ":
+        print("Moving end effector forward")
+        g_context.target_pos_y += 0.1
+    elif chr(keycode) == "Ĉ":
+        print("Moving end effector backward")
+        g_context.target_pos_y -= 0.1
 
 
 def get_instances_per_category(category: str) -> List[Path]:
@@ -654,14 +668,6 @@ def main() -> int:
     mink.move_mocap_to_frame(model, data, "target", "robot-attachment_site", "site")
     mj.mj_forward(model, data)
 
-    initial_target_position = data.mocap_pos[0].copy()
-
-    # Circular trajectory parameters
-    amp = 0.10
-    freq = 0.2
-
-    time = 0.0
-
     with mjviewer.launch_passive(model, data, key_callback=callback, show_left_ui=SHOW_LEFT_UI, show_right_ui=SHOW_RIGHT_UI) as viewer:
         while viewer.is_running():
             if g_context.dirty_next_model or g_context.dirty_reload:
@@ -695,10 +701,6 @@ def main() -> int:
                 mink.move_mocap_to_frame(model, data, "target", "robot-attachment_site", "site")
                 mj.mj_forward(model, data)
 
-                initial_target_position = data.mocap_pos[0].copy()
-
-                time = 0.0
-
                 if not args.nogui:
                     if gui_process is not None and gui_process.is_alive():
                         gui_process.kill()
@@ -715,16 +717,7 @@ def main() -> int:
                 viewer.sync()
                 # ---------------------------------------------------------------------------
             
-            time += 0.002
-            # Circular offset
-            offset = np.array(
-                [
-                    amp * np.cos(2 * np.pi * freq * time),
-                    amp * np.sin(2 * np.pi * freq * time),
-                    0.0,
-                ]
-            )
-            data.mocap_pos[0] = initial_target_position + offset
+            data.mocap_pos[0] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
 
             # Update the end effector task target from the mocap body
             T_wt = mink.SE3.from_mocap_name(model, data, "target")
