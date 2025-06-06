@@ -47,6 +47,11 @@ CATEGORY_ID_TO_EULER = {
     "Dresser": [1.57, 0, 3.14],
 }
 
+ROBOT_HOME = {
+    "qpos": [0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853, 0.04, 0.04],
+    "qvel": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "ctrl": [0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853, 0.0],
+}
 
 
 class Context:
@@ -163,6 +168,13 @@ def compute_aabb_from_model(model_xml_path: Path) -> Tuple[np.ndarray, np.ndarra
         p_max[2] = max(p_max[2], max_point[2])
     
     return p_min, p_max
+
+def reset_robot_to_home(model: mj.MjModel, data: mj.MjData, home: Dict[str, List[float]]) -> None:
+    data.qpos[:9] = home["qpos"]
+    data.qvel[:9] = home["qvel"]
+    data.ctrl[:8] = home["ctrl"]
+
+    mj.mj_forward(model, data)
 
 def load_category_item(category_id: str, category_index: int) -> mj.MjSpec:
     obj_path = g_context.instances_per_category[category_index]
@@ -295,6 +307,8 @@ def load_scene(
 
     model = root_spec.compile()
     data = mj.MjData(model)
+
+    reset_robot_to_home(model, data, ROBOT_HOME)
 
     with open("model.xml", "w") as fhandle:
         fhandle.write(root_spec.to_xml())
@@ -571,6 +585,9 @@ def main() -> int:
     model, data = load_scene(args.robot, args.category)
     g_context.model = model
     g_context.data = data
+
+    print(f"model.nq : {model.nq}")
+    print(f"model.nv : {model.nv}")
 
     var_jnt_id = Value('i', -1)
     var_jnt_qpos_change = Value('i', 0)
