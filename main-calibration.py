@@ -1,5 +1,6 @@
 import argparse
 import glob
+import json
 import re
 import multiprocessing
 from multiprocessing import Process, Value, Lock
@@ -405,6 +406,21 @@ def run_imgui_interface(
                     if changed:
                         with lock:
                             joints_info[var_jnt_id.value].jnt_mpvar_frictionloss.value = frictionloss_value
+
+                    save = imgui.button("Save Properties")
+                    if save:
+                        with lock:
+                            json_data = dict(joints={})
+                            for jnt_id, jnt_name in zip(jnt_ids, jnt_names):
+                                json_data["joints"][jnt_name] = {}
+                                json_data["joints"][jnt_name]["stiffness"] = joints_info[jnt_id].jnt_mpvar_stiffness.value
+                                json_data["joints"][jnt_name]["armature"] = joints_info[jnt_id].jnt_mpvar_armature.value
+                                json_data["joints"][jnt_name]["damping"] = joints_info[jnt_id].jnt_mpvar_damping.value
+                                json_data["joints"][jnt_name]["frictionloss"] = joints_info[jnt_id].jnt_mpvar_frictionloss.value
+
+                            with open("parameters.json", "w") as fhandle:
+                                json.dump(json_data, fhandle, indent=4)
+
             else:
                 imgui.text("No joints for this object")
 

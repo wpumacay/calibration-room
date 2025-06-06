@@ -188,3 +188,5 @@ assets/franka_fr3/
 
 # Exclude generated model.xml from main demo
 model.xml
+# Exclude generated parameters.json from main demo
+parameters.json
