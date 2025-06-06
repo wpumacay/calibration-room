@@ -20,9 +20,14 @@ from scipy.spatial.transform import Rotation as R
 import mujoco as mj
 import mujoco.viewer as mjviewer
 
+import mink
+
 CURRENT_DIR = Path(__file__).parent
 ASSETS_DIR = CURRENT_DIR / "assets"
 EMPTY_SCENE_PATH = ASSETS_DIR / "empty_scene.xml"
+
+SHOW_LEFT_UI = False
+SHOW_RIGHT_UI = False
 
 ROBOT_ID_TO_PATH = {
     "stretch": ASSETS_DIR / "stretch_robots" / "stretch3.xml",
@@ -47,11 +52,18 @@ CATEGORY_ID_TO_EULER = {
     "Dresser": [1.57, 0, 3.14],
 }
 
+# Default home keyframe for franka-fr3 arm
 ROBOT_HOME = {
     "qpos": [0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853, 0.04, 0.04],
     "qvel": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     "ctrl": [0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853, 0.0],
 }
+
+# IK parameters
+SOLVER = "quadprog"
+POS_THRESHOLD = 1e-4
+ORI_THRESHOLD = 1e-4
+MAX_ITERS = 20
 
 
 class Context:
@@ -537,6 +549,27 @@ def load_valid_categories(assets_path: Path) -> List[str]:
 
     return valid_categories
 
+def converge_ik(
+    configuration, tasks, dt, solver, pos_threshold, ori_threshold, max_iters
+):
+    """
+    Runs up to 'max_iters' of IK steps. Returns True if position and orientation
+    are below thresholds, otherwise False.
+    """
+    for _ in range(max_iters):
+        vel = mink.solve_ik(configuration, tasks, dt, solver, 1e-3)
+        configuration.integrate_inplace(vel, dt)
+
+        # Only checking the first FrameTask here (end_effector_task).
+        # If you want to check multiple tasks, sum or combine their errors.
+        err = tasks[0].compute_error(configuration)
+        pos_achieved = np.linalg.norm(err[:3]) <= pos_threshold
+        ori_achieved = np.linalg.norm(err[3:]) <= ori_threshold
+
+        if pos_achieved and ori_achieved:
+            return True
+    return False
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -605,7 +638,31 @@ def main() -> int:
         launcher_process = Process(target=run_launcher_interface, args=(lock,))
         launcher_process.start()
 
-    with mjviewer.launch_passive(model, data, key_callback=callback) as viewer:
+    configuration = mink.Configuration(model)
+    end_effector_task = mink.FrameTask(
+        frame_name="robot-attachment_site",
+        frame_type="site",
+        position_cost=1.0,
+        orientation_cost=1.0,
+        lm_damping=1.0,
+    )
+    posture_task = mink.PostureTask(model=model, cost=1e-2)
+    tasks = [end_effector_task, posture_task]
+
+    configuration.update(data.qpos)
+    posture_task.set_target_from_configuration(configuration)
+    mink.move_mocap_to_frame(model, data, "target", "robot-attachment_site", "site")
+    mj.mj_forward(model, data)
+
+    initial_target_position = data.mocap_pos[0].copy()
+
+    # Circular trajectory parameters
+    amp = 0.10
+    freq = 0.2
+
+    time = 0.0
+
+    with mjviewer.launch_passive(model, data, key_callback=callback, show_left_ui=SHOW_LEFT_UI, show_right_ui=SHOW_RIGHT_UI) as viewer:
         while viewer.is_running():
             if g_context.dirty_next_model or g_context.dirty_reload:
                 # Load the next model into the simulation -----------------------------------
@@ -621,6 +678,26 @@ def main() -> int:
 
                 g_context.model = model
                 g_context.data = data
+
+                configuration = mink.Configuration(model)
+                end_effector_task = mink.FrameTask(
+                    frame_name="robot-attachment_site",
+                    frame_type="site",
+                    position_cost=1.0,
+                    orientation_cost=1.0,
+                    lm_damping=1.0,
+                )
+                posture_task = mink.PostureTask(model=model, cost=1e-2)
+                tasks = [end_effector_task, posture_task]
+
+                configuration.update(data.qpos)
+                posture_task.set_target_from_configuration(configuration)
+                mink.move_mocap_to_frame(model, data, "target", "robot-attachment_site", "site")
+                mj.mj_forward(model, data)
+
+                initial_target_position = data.mocap_pos[0].copy()
+
+                time = 0.0
 
                 if not args.nogui:
                     if gui_process is not None and gui_process.is_alive():
@@ -638,6 +715,35 @@ def main() -> int:
                 viewer.sync()
                 # ---------------------------------------------------------------------------
             
+            time += 0.002
+            # Circular offset
+            offset = np.array(
+                [
+                    amp * np.cos(2 * np.pi * freq * time),
+                    amp * np.sin(2 * np.pi * freq * time),
+                    0.0,
+                ]
+            )
+            data.mocap_pos[0] = initial_target_position + offset
+
+            # Update the end effector task target from the mocap body
+            T_wt = mink.SE3.from_mocap_name(model, data, "target")
+            end_effector_task.set_target(T_wt)
+
+            # Attempt to converge IK
+            converge_ik(
+                configuration,
+                tasks,
+                0.002,
+                SOLVER,
+                POS_THRESHOLD,
+                ORI_THRESHOLD,
+                MAX_ITERS,
+            )
+
+            # Set robot controls (first 8 dofs in your configuration)
+            data.ctrl = configuration.q[:8]
+
             # Update the model parameters from the GUI -------------------------------------------------------
             if not args.nogui:
                 if var_jnt_id.value != -1:
