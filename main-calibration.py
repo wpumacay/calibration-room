@@ -24,16 +24,19 @@ import mink
 
 CURRENT_DIR = Path(__file__).parent
 ASSETS_DIR = CURRENT_DIR / "assets"
-EMPTY_SCENE_PATH = ASSETS_DIR / "empty_scene.xml"
 
 SHOW_LEFT_UI = False
 SHOW_RIGHT_UI = False
+
+# These are the defaults, but these are overwritten by the path from the config file (if given) ------------
+EMPTY_SCENE_PATH = ASSETS_DIR / "empty_scene.xml"
 
 ROBOT_ID_TO_PATH = {
     "stretch": ASSETS_DIR / "stretch_robots" / "stretch3.xml",
     "xarm7_ranger": ASSETS_DIR / "xarm7_ranger" / "xarm7_ranger.xml",
     "franka": ASSETS_DIR / "franka_fr3" / "fr3.xml",
 }
+# ----------------------------------------------------------------------------------------------------------
 
 CATEGORY_ID_TO_POSITION = {
     "Fridge": [0, -0.95, 0.75],
@@ -90,6 +93,8 @@ class Context:
         self.timestep = 0.002
         self.ik_max_iters = MAX_ITERS
 
+        self.assets_dir = ASSETS_DIR
+
         self.target_pos_x = 0.5
         self.target_pos_y = 0.0
         self.target_pos_z = 0.5
@@ -103,7 +108,7 @@ g_context: Context = Context()
 def callback(keycode) -> None:
     global g_context
 
-    print(f"keycode: {keycode}, chr: {chr(keycode)}")
+    # print(f"keycode: {keycode}, chr: {chr(keycode)}")
 
     if chr(keycode) == " ":
         g_context.index_in_category = (
@@ -137,7 +142,7 @@ def callback(keycode) -> None:
 
 
 def get_instances_per_category(category: str) -> List[Path]:
-    base_path = str((ASSETS_DIR / "ThorAssets").resolve())
+    base_path = str((g_context.assets_dir / "ThorAssets").resolve())
     print(f"Looking for models in this folder: {base_path}")
     path_candidates = [Path(path) for path in glob.glob(f"{base_path}/**/*.xml", recursive=True)]
     pattern = re.compile(category + r"_\d+")
@@ -659,6 +664,9 @@ def main() -> int:
             g_context.ee_step_size_z = config_data.get("ee_step_size_z", 0.01)
             g_context.timestep = config_data.get("timestep", 0.002)
             g_context.ik_max_iters = config_data.get("ik_max_iters", 20)
+            config_assets_dir = config_data.get("assets_dir", "")
+            if config_assets_dir != "":
+                g_context.assets_dir = Path(config_assets_dir)
             print("Successfully loaded config data from config file")
     except FileNotFoundError:
         print("No config file provided, using defaults instead")
@@ -685,7 +693,7 @@ def main() -> int:
         gui_process = Process(target=run_imgui_interface, args=(var_jnt_id, var_jnt_qpos_change, joints_info, lock))
         gui_process.start()
 
-    categories_info: List[str] = load_valid_categories(ASSETS_DIR)
+    categories_info: List[str] = load_valid_categories(g_context.assets_dir)
     launcher_process = None
     if args.launcher:
         launcher_process = Process(target=run_launcher_interface, args=(lock,))
