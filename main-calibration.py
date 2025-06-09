@@ -86,6 +86,9 @@ class Context:
         self.use_table: bool = False
         self.use_item: bool = True
 
+        self.robot_position_xyz = [0.0, 0.0, 0.0]
+        self.robot_rotation_rpy = [0.0, 0.0, 0.0]
+
         self.ee_step_size_x = 0.01
         self.ee_step_size_y = 0.01
         self.ee_step_size_z = 0.01
@@ -642,16 +645,10 @@ def main() -> int:
     args = parser.parse_args()
 
     global g_context
+    global EMPTY_SCENE_PATH
+    global ROBOT_ID_TO_PATH
     g_context.robot_id = args.robot
     g_context.category_id = args.category
-    g_context.instances_per_category = get_instances_per_category(args.category)
-    g_context.num_items_in_category = len(g_context.instances_per_category)
-    g_context.use_table = not args.notable
-
-    print(f"Loading model category: {g_context.category_id}")
-    print(f"Index in category: {g_context.index_in_category}")
-    print(f"Instances per category: {g_context.instances_per_category}")
-    print(f"Loading model: {g_context.instances_per_category[g_context.index_in_category]}")
 
     try:
         config_filepath = str((CURRENT_DIR / "main-calibration.json").resolve())
@@ -667,6 +664,16 @@ def main() -> int:
             config_assets_dir = config_data.get("assets_dir", "")
             if config_assets_dir != "":
                 g_context.assets_dir = Path(config_assets_dir)
+                print(f"Using assets_dir: {str(g_context.assets_dir.resolve())}")
+
+            EMPTY_SCENE_PATH = g_context.assets_dir / "empty_scene.xml"
+
+            ROBOT_ID_TO_PATH = {
+                "stretch": g_context.assets_dir / "stretch_robots" / "stretch3.xml",
+                "xarm7_ranger": g_context.assets_dir / "xarm7_ranger" / "xarm7_ranger.xml",
+                "franka": g_context.assets_dir / "franka_fr3" / "fr3.xml",
+            }
+
             print("Successfully loaded config data from config file")
     except FileNotFoundError:
         print("No config file provided, using defaults instead")
@@ -674,6 +681,15 @@ def main() -> int:
     except json.JSONDecodeError as e:
         print(f"Error parsing the JSON config file: {e}. Using defaults instead")
         pass
+
+    g_context.instances_per_category = get_instances_per_category(args.category)
+    g_context.num_items_in_category = len(g_context.instances_per_category)
+    g_context.use_table = not args.notable
+
+    print(f"Loading model category: {g_context.category_id}")
+    print(f"Index in category: {g_context.index_in_category}")
+    print(f"Instances per category: {g_context.instances_per_category}")
+    print(f"Loading model: {g_context.instances_per_category[g_context.index_in_category]}")
 
     # TODO(wilbert): might need to set simulation parameters to get a stable stretch robot simulation
     model, data = load_scene(args.robot, args.category, 0, g_context.use_item)
