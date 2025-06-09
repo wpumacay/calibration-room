@@ -1,6 +1,0 @@
-config:
-  use_item: True
-  ee_step_size_x: 0.01
-  ee_step_size_y: 0.01
-  ee_step_size_z: 0.01
-

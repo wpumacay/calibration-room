@@ -2,7 +2,6 @@ import argparse
 import glob
 import json
 import re
-import yaml
 import multiprocessing
 from multiprocessing import Process, Value, Lock
 from multiprocessing.sharedctypes import Synchronized
@@ -639,10 +638,10 @@ def main() -> int:
     print(f"Loading model: {g_context.instances_per_category[g_context.index_in_category]}")
 
     try:
-        config_filepath = str((CURRENT_DIR / "main-calibration.yaml").resolve())
+        config_filepath = str((CURRENT_DIR / "main-calibration.json").resolve())
         with open(config_filepath, "r") as fhandle:
-            yaml_data = yaml.safe_load(fhandle)
-            config_data = yaml_data.get("config", {})
+            json_data = json.load(fhandle)
+            config_data = json_data.get("config", {})
             g_context.use_item = config_data.get("use_item", True)
             g_context.ee_step_size_x = config_data.get("ee_step_size_x", 0.01)
             g_context.ee_step_size_y = config_data.get("ee_step_size_y", 0.01)
@@ -651,8 +650,8 @@ def main() -> int:
     except FileNotFoundError:
         print("No config file provided, using defaults instead")
         pass
-    except yaml.YAMLError as e:
-        print(f"Error parsing the YAML config file: {e}. Using defaults instead")
+    except json.JSONDecodeError as e:
+        print(f"Error parsing the JSON config file: {e}. Using defaults instead")
         pass
 
     # TODO(wilbert): might need to set simulation parameters to get a stable stretch robot simulation
