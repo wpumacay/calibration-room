@@ -2,6 +2,7 @@ import argparse
 import glob
 import json
 import re
+import yaml
 import multiprocessing
 from multiprocessing import Process, Value, Lock
 from multiprocessing.sharedctypes import Synchronized
@@ -81,6 +82,11 @@ class Context:
         self.dirty_reload: bool = False  # Whether or not to reload the current model
         
         self.use_table: bool = False
+        self.use_item: bool = True
+
+        self.ee_step_size_x = 0.01
+        self.ee_step_size_y = 0.01
+        self.ee_step_size_z = 0.01
 
         self.target_pos_x = 0.5
         self.target_pos_y = 0.0
@@ -108,16 +114,16 @@ def callback(keycode) -> None:
         g_context.dirty_reload = True
     elif chr(keycode) == "ć":
         print("Moving end effector to the left")
-        g_context.target_pos_x -= 0.1
+        g_context.target_pos_x -= g_context.ee_step_size_x
     elif chr(keycode) == "Ć":
         print("Moving end effector to the right")
-        g_context.target_pos_x += 0.1
+        g_context.target_pos_x += g_context.ee_step_size_x
     elif chr(keycode) == "ĉ":
         print("Moving end effector forward")
-        g_context.target_pos_y += 0.1
+        g_context.target_pos_y += g_context.ee_step_size_y
     elif chr(keycode) == "Ĉ":
         print("Moving end effector backward")
-        g_context.target_pos_y -= 0.1
+        g_context.target_pos_y -= g_context.ee_step_size_y
 
 
 def get_instances_per_category(category: str) -> List[Path]:
@@ -280,7 +286,10 @@ def load_category_item(category_id: str, category_index: int) -> mj.MjSpec:
     return obj_spec
 
 def load_scene(
-    robot_id: str, category_id: str, category_index: int = 0
+    robot_id: str,
+    category_id: str,
+    category_index: int = 0,
+    use_item: bool = True,
 ) -> Tuple[mj.MjModel, mj.MjData]:
     global g_context
     root_spec = mj.MjSpec.from_file(str(EMPTY_SCENE_PATH.resolve()))
@@ -300,36 +309,37 @@ def load_scene(
     robot_root_body = robot_spec.worldbody.first_body()
     root_spec_frame.attach_body(robot_root_body, "robot-", "")
 
-    category_item_spec = load_category_item(category_id, category_index)
-    category_item_root_body = category_item_spec.worldbody.first_body()
+    if use_item:
+        category_item_spec = load_category_item(category_id, category_index)
+        category_item_root_body = category_item_spec.worldbody.first_body()
 
-    # root_spec_frame.attach_body(category_item_root_body, f"{category_id}-", "")
-    root_spec_frame.attach_body(category_item_root_body, "", "")
+        # root_spec_frame.attach_body(category_item_root_body, f"{category_id}-", "")
+        root_spec_frame.attach_body(category_item_root_body, "", "")
 
-    if g_context.use_table:
-        robot_pmin, robot_pmax = compute_aabb_from_model(ROBOT_ID_TO_PATH[robot_id])
-        asset_pmin, asset_pmax = compute_aabb_from_model(g_context.instances_per_category[category_index])
+        if g_context.use_table:
+            robot_pmin, robot_pmax = compute_aabb_from_model(ROBOT_ID_TO_PATH[robot_id])
+            asset_pmin, asset_pmax = compute_aabb_from_model(g_context.instances_per_category[category_index])
 
-        # print(f"robot pmin: {robot_pmin} / pmax: {robot_pmax}")
-        # print(f"asset pmin: {asset_pmin} / pmax: {asset_pmax}")
+            # print(f"robot pmin: {robot_pmin} / pmax: {robot_pmax}")
+            # print(f"asset pmin: {asset_pmin} / pmax: {asset_pmax}")
 
-        robot_height = robot_pmax[2] - robot_pmin[2]
-        asset_height = asset_pmax[1] - asset_pmin[1] # Asset is rotated
+            robot_height = robot_pmax[2] - robot_pmin[2]
+            asset_height = asset_pmax[1] - asset_pmin[1] # Asset is rotated
 
-        if robot_height > asset_height:
-            diff_height = robot_height - asset_height
-            # print(f"robot-height: {robot_height}")
-            # print(f"asset-height: {asset_height}")
-            # print(f"diff-height: {diff_height}")
-            table_body = root_spec.worldbody.add_body(
-                name="table", pos=[0, -1.0, diff_height / 4]
-            )
-            table_body.add_geom(
-                type=mj.mjtGeom.mjGEOM_BOX,
-                size=[0.6, 0.5, diff_height / 4],
-                mass=1,
-                material="wood",
-            )
+            if robot_height > asset_height:
+                diff_height = robot_height - asset_height
+                # print(f"robot-height: {robot_height}")
+                # print(f"asset-height: {asset_height}")
+                # print(f"diff-height: {diff_height}")
+                table_body = root_spec.worldbody.add_body(
+                    name="table", pos=[0, -1.0, diff_height / 4]
+                )
+                table_body.add_geom(
+                    type=mj.mjtGeom.mjGEOM_BOX,
+                    size=[0.6, 0.5, diff_height / 4],
+                    mass=1,
+                    material="wood",
+                )
 
     model = root_spec.compile()
     data = mj.MjData(model)
@@ -628,8 +638,25 @@ def main() -> int:
     print(f"Instances per category: {g_context.instances_per_category}")
     print(f"Loading model: {g_context.instances_per_category[g_context.index_in_category]}")
 
+    try:
+        config_filepath = str((CURRENT_DIR / "main-calibration.yaml").resolve())
+        with open(config_filepath, "r") as fhandle:
+            yaml_data = yaml.safe_load(fhandle)
+            config_data = yaml_data.get("config", {})
+            g_context.use_item = config_data.get("use_item", True)
+            g_context.ee_step_size_x = config_data.get("ee_step_size_x", 0.01)
+            g_context.ee_step_size_y = config_data.get("ee_step_size_y", 0.01)
+            g_context.ee_step_size_z = config_data.get("ee_step_size_z", 0.01)
+            print("Successfully loaded config data from config file")
+    except FileNotFoundError:
+        print("No config file provided, using defaults instead")
+        pass
+    except yaml.YAMLError as e:
+        print(f"Error parsing the YAML config file: {e}. Using defaults instead")
+        pass
+
     # TODO(wilbert): might need to set simulation parameters to get a stable stretch robot simulation
-    model, data = load_scene(args.robot, args.category)
+    model, data = load_scene(args.robot, args.category, 0, g_context.use_item)
     g_context.model = model
     g_context.data = data
 
@@ -675,7 +702,7 @@ def main() -> int:
                 g_context.dirty_next_model = False
                 g_context.dirty_reload = False
                 model, data = load_scene(
-                    g_context.robot_id, g_context.category_id, g_context.index_in_category
+                    g_context.robot_id, g_context.category_id, g_context.index_in_category, g_context.use_item
                 )
                 sim = viewer._get_sim()
                 if sim is not None:
