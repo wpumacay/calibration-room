@@ -91,12 +91,16 @@ class Context:
         self.target_pos_y = 0.0
         self.target_pos_z = 0.5
 
+        self.gripper_state = 1
+
 
 g_context: Context = Context()
 
 
 def callback(keycode) -> None:
     global g_context
+
+    print(f"keycode: {keycode}, chr: {chr(keycode)}")
 
     if chr(keycode) == " ":
         g_context.index_in_category = (
@@ -123,6 +127,10 @@ def callback(keycode) -> None:
     elif chr(keycode) == "Ĉ":
         print("Moving end effector backward")
         g_context.target_pos_y -= g_context.ee_step_size_y
+    elif chr(keycode) == "G":
+        action = "Closing" if g_context.gripper_state == 1 else "Opening"
+        print(f"{action} gripper")
+        g_context.gripper_state = 1 - g_context.gripper_state
 
 
 def get_instances_per_category(category: str) -> List[Path]:
@@ -759,9 +767,10 @@ def main() -> int:
                 ORI_THRESHOLD,
                 MAX_ITERS,
             )
-
+ 
             # Set robot controls (first 8 dofs in your configuration)
-            data.ctrl = configuration.q[:8]
+            data.ctrl[:7] = configuration.q[:7]
+            data.ctrl[7] = 255. * g_context.gripper_state
 
             # Update the model parameters from the GUI -------------------------------------------------------
             if not args.nogui:
