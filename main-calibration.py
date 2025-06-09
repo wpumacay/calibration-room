@@ -87,6 +87,9 @@ class Context:
         self.ee_step_size_y = 0.01
         self.ee_step_size_z = 0.01
 
+        self.timestep = 0.002
+        self.ik_max_iters = MAX_ITERS
+
         self.target_pos_x = 0.5
         self.target_pos_y = 0.0
         self.target_pos_z = 0.5
@@ -302,7 +305,7 @@ def load_scene(
     root_spec = mj.MjSpec.from_file(str(EMPTY_SCENE_PATH.resolve()))
 
     # Set simulation properties similar to stretch scene
-    root_spec.option.timestep = 0.002
+    root_spec.option.timestep = g_context.timestep
     root_spec.option.impratio = 100
     root_spec.option.integrator = mj.mjtIntegrator.mjINT_IMPLICITFAST.value
     root_spec.option.cone = mj.mjtCone.mjCONE_ELLIPTIC.value
@@ -587,7 +590,7 @@ def converge_ik(
     Runs up to 'max_iters' of IK steps. Returns True if position and orientation
     are below thresholds, otherwise False.
     """
-    for _ in range(max_iters):
+    for i in range(max_iters):
         vel = mink.solve_ik(configuration, tasks, dt, solver, 1e-3)
         configuration.integrate_inplace(vel, dt)
 
@@ -654,6 +657,8 @@ def main() -> int:
             g_context.ee_step_size_x = config_data.get("ee_step_size_x", 0.01)
             g_context.ee_step_size_y = config_data.get("ee_step_size_y", 0.01)
             g_context.ee_step_size_z = config_data.get("ee_step_size_z", 0.01)
+            g_context.timestep = config_data.get("timestep", 0.002)
+            g_context.ik_max_iters = config_data.get("ik_max_iters", 20)
             print("Successfully loaded config data from config file")
     except FileNotFoundError:
         print("No config file provided, using defaults instead")
@@ -761,11 +766,11 @@ def main() -> int:
             converge_ik(
                 configuration,
                 tasks,
-                0.002,
+                g_context.timestep,
                 SOLVER,
                 POS_THRESHOLD,
                 ORI_THRESHOLD,
-                MAX_ITERS,
+                g_context.ik_max_iters,
             )
  
             # Set robot controls (first 8 dofs in your configuration)

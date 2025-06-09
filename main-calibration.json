@@ -1,6 +1,8 @@
 {
     "config": {
         "use_item": true,
+        "timestep": 0.002,
+        "ik_max_iters": 20,
         "ee_step_size_x": 0.01,
         "ee_step_size_y": 0.01,
         "ee_step_size_z": 0.01
