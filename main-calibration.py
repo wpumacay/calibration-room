@@ -28,6 +28,18 @@ ASSETS_DIR = CURRENT_DIR / "assets"
 SHOW_LEFT_UI = False
 SHOW_RIGHT_UI = False
 
+STR_DESC_STIFFNESS = """Joint stiffness. It represents how strong is the force
+of a spring added at the equilibrium position.
+"""
+
+STR_DESC_FRICTIONLOSS = """Friction loss at the joint due to dry friction."""
+
+STR_DESC_DAMPING = """Damping applied at the joint, which is a force
+linear in velocity."""
+
+STR_DESC_ARMATURE = """Extra inertia added to the joint not due to the body mass."""
+
+
 # These are the defaults, but these are overwritten by the path from the config file (if given) ------------
 EMPTY_SCENE_PATH = ASSETS_DIR / "empty_scene.xml"
 
@@ -450,30 +462,37 @@ def run_imgui_interface(
                     #         var_jnt_qpos_change.value = 1
 
                     changed, stiffness_value = imgui.input_float("Stiffness", joints_info[var_jnt_id.value].jnt_mpvar_stiffness.value)
+                    if imgui.is_item_hovered():
+                        imgui.set_tooltip(STR_DESC_STIFFNESS)
                     if changed:
                         with lock:
                             joints_info[var_jnt_id.value].jnt_mpvar_stiffness.value = stiffness_value
 
-                    # changed, armature_value = imgui.input_float("Armature", joints_info[var_jnt_id.value].jnt_mpvar_armature.value)
+                    changed, frictionloss_value = imgui.input_float("FrictionLoss", joints_info[var_jnt_id.value].jnt_mpvar_frictionloss.value)
+                    if imgui.is_item_hovered():
+                        imgui.set_tooltip(STR_DESC_FRICTIONLOSS)
+                    if changed:
+                        with lock:
+                            joints_info[var_jnt_id.value].jnt_mpvar_frictionloss.value = frictionloss_value
+
+                    changed, damping_value = imgui.input_float("Damping", joints_info[var_jnt_id.value].jnt_mpvar_damping.value)
+                    if imgui.is_item_hovered():
+                        imgui.set_tooltip(STR_DESC_DAMPING)
+                    if changed:
+                        with lock:
+                            joints_info[var_jnt_id.value].jnt_mpvar_damping.value = damping_value
+
                     changed, armature_value = imgui.slider_float(
                         "Armature",
                         joints_info[var_jnt_id.value].jnt_mpvar_armature.value,
                         min_value=0.0,
                         max_value=1.0,
                     )
+                    if imgui.is_item_hovered():
+                        imgui.set_tooltip(STR_DESC_ARMATURE)
                     if changed:
                         with lock:
                             joints_info[var_jnt_id.value].jnt_mpvar_armature.value = armature_value
-
-                    changed, damping_value = imgui.input_float("Damping", joints_info[var_jnt_id.value].jnt_mpvar_damping.value)
-                    if changed:
-                        with lock:
-                            joints_info[var_jnt_id.value].jnt_mpvar_damping.value = damping_value
-
-                    changed, frictionloss_value = imgui.input_float("FrictionLoss", joints_info[var_jnt_id.value].jnt_mpvar_frictionloss.value)
-                    if changed:
-                        with lock:
-                            joints_info[var_jnt_id.value].jnt_mpvar_frictionloss.value = frictionloss_value
 
                     save = imgui.button("Save Properties")
                     if save:
