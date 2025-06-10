@@ -22,6 +22,8 @@ import mujoco.viewer as mjviewer
 
 import mink
 
+from spacemouse import SpaceMouse
+
 CURRENT_DIR = Path(__file__).parent
 ASSETS_DIR = CURRENT_DIR / "assets"
 
@@ -113,6 +115,10 @@ class Context:
         self.target_pos_x = 0.5
         self.target_pos_y = 0.0
         self.target_pos_z = 0.5
+
+        self.target_ee_roll = 0.0
+        self.target_ee_pitch = 0.0
+        self.target_ee_yaw = 0.0
 
         self.gripper_state = 1
 
@@ -705,6 +711,9 @@ def main() -> int:
     g_context.num_items_in_category = len(g_context.instances_per_category)
     g_context.use_table = not args.notable
 
+    spacemouse = SpaceMouse()
+    spacemouse.start_control()
+
     print(f"Loading model category: {g_context.category_id}")
     print(f"Index in category: {g_context.index_in_category}")
     print(f"Instances per category: {g_context.instances_per_category}")
@@ -798,8 +807,39 @@ def main() -> int:
                 mj.mj_forward(model, data)
                 viewer.sync()
                 # ---------------------------------------------------------------------------
-            
+
+            # dx, dy, dz = spacemouse.control[:3] * 0.001
+            # g_context.target_pos_x += dx
+            # g_context.target_pos_y += dy
+            # g_context.target_pos_z += dz
+
+            dx, dy, dz = spacemouse.control[:3] * 0.001
+            droll, dpitch, dyaw = spacemouse.control[3:] * 0.01
+            drot = R.from_euler("xyz", [droll, dpitch, dyaw]).as_matrix()
+
+            delta_tf_pos = np.eye(4)
+            delta_tf_pos[:3, 3] = [dx, dy, dz]
+
+            delta_tf_rot = np.eye(4)
+            delta_tf_rot[:3, :3] = drot
+
+            current_target_pose = np.eye(4)
+            current_target_pose[:3, 3] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
+            current_target_pose[:3, :3] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_matrix()
+
+            new_target_pose = (delta_tf_pos @ current_target_pose) @ delta_tf_rot
+            g_context.target_pos_x = new_target_pose[0, 3]
+            g_context.target_pos_y = new_target_pose[1, 3]
+            g_context.target_pos_z = new_target_pose[2, 3]
+
+            ee_angles = R.from_matrix(new_target_pose[:3, :3]).as_euler("xyz")
+            g_context.target_ee_roll = ee_angles[0]
+            g_context.target_ee_pitch = ee_angles[1]
+            g_context.target_ee_yaw = ee_angles[2]
+
             data.mocap_pos[0] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
+            data.mocap_quat[0] = R.from_matrix(new_target_pose[:3, :3]).as_quat(scalar_first=True)
+            # print(f"quat: {R.from_matrix(new_target_pose[:3, :3]).as_quat(scalar_first=True)}")
 
             # Update the end effector task target from the mocap body
             T_wt = mink.SE3.from_mocap_name(model, data, "target")

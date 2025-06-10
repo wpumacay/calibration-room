@@ -3,7 +3,7 @@
         "use_item": true,
         "timestep": 0.002,
         "ik_max_iters": 20,
-        "assets_dir": "/Users/wilbertp/workspace/ai2/mujoco-thor/calibration-room/assets",
+        "assets_dir": "",
         "ee_step_size_x": 0.01,
         "ee_step_size_y": 0.01,
         "ee_step_size_z": 0.01,
