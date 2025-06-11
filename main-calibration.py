@@ -801,7 +801,10 @@ def main() -> int:
     g_context.num_items_in_category = len(g_context.instances_per_category)
     g_context.use_table = not args.notable
 
-    spacemouse = SpaceMouse() if SPACEMOUSE_WORKING else None
+    try:
+        spacemouse = SpaceMouse() if SPACEMOUSE_WORKING else None
+    except ValueError:
+        spacemouse = None
     if spacemouse:
         spacemouse.start_control()
 
