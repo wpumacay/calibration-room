@@ -884,6 +884,10 @@ def main() -> int:
     mj.mj_forward(model, data)
 
     with mjviewer.launch_passive(model, data, key_callback=callback, show_left_ui=SHOW_LEFT_UI, show_right_ui=SHOW_RIGHT_UI) as viewer:
+        viewer.cam.lookat = [0.04764209, -0.02826854, 0.41072837]
+        viewer.cam.azimuth = -94.582
+        viewer.cam.elevation = -25.376
+        viewer.cam.distance = 1.311
         while viewer.is_running():
             if g_context.dirty_robot_home:
                 g_context.dirty_robot_home = False
@@ -1004,6 +1008,12 @@ def main() -> int:
             # g_context.target_ee_roll = ee_angles[0]
             # g_context.target_ee_pitch = ee_angles[1]
             # g_context.target_ee_yaw = ee_angles[2]
+
+            # camera = viewer.cam
+            # print(f"pos: {camera.lookat}")
+            # print(f"distance: {camera.distance}")
+            # print(f"azimuth: {camera.azimuth}")
+            # print(f"elevation: {camera.elevation}")
 
             if spacemouse is not None:
                 target_joints, gripper_control, update_controller = wrap_ee_to_joint(agent, kinematics, spacemouse.control, spacemouse.gripper)
