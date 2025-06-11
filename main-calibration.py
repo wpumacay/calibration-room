@@ -22,7 +22,12 @@ import mujoco.viewer as mjviewer
 
 # import mink
 
-from spacemouse import SpaceMouse
+SPACEMOUSE_WORKING = True
+try:
+    from spacemouse import SpaceMouse
+except ImportError:
+    print(f"Spacemouse device is not available, using keyboard as backup")
+    SPACEMOUSE_WORKING = False
 
 from mujoco_thor_abstract import Agent, Controller, ControllerPhysicsParams
 from mujoco_thor_kinematics import MujocoKinematics
@@ -680,15 +685,14 @@ def load_valid_categories(assets_path: Path) -> List[str]:
 def wrap_ee_to_joint(
     agent: Agent,
     kinematics: MujocoKinematics,
-    spacemouse: SpaceMouse,
+    joint_control: np.ndarray,
+    gripper_control: float,
 ):
     global g_context
     assert g_context.model is not None
     assert g_context.data is not None
 
     current_joints = agent(g_context.model, g_context.data).all_joint_pos.copy()
-    joint_control = spacemouse.control
-    gripper_control = spacemouse.gripper
 
     if np.all(np.abs(joint_control) < 0.5):
         return current_joints, gripper_control, False
@@ -797,8 +801,9 @@ def main() -> int:
     g_context.num_items_in_category = len(g_context.instances_per_category)
     g_context.use_table = not args.notable
 
-    spacemouse = SpaceMouse()
-    spacemouse.start_control()
+    spacemouse = SpaceMouse() if SPACEMOUSE_WORKING else None
+    if spacemouse:
+        spacemouse.start_control()
 
     print(f"Loading model category: {g_context.category_id}")
     print(f"Index in category: {g_context.index_in_category}")
@@ -969,7 +974,23 @@ def main() -> int:
             # g_context.target_ee_pitch = ee_angles[1]
             # g_context.target_ee_yaw = ee_angles[2]
 
-            target_joints, gripper_control, update_controller = wrap_ee_to_joint(agent, kinematics, spacemouse)
+            if spacemouse is not None:
+                target_joints, gripper_control, update_controller = wrap_ee_to_joint(agent, kinematics, spacemouse.control, spacemouse.gripper)
+            else:
+                gripper_control = 255.0 * g_context.gripper_state
+                update_controller = True
+
+                new_target_pose = np.eye(4)
+                new_target_pose[:3, 3] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
+                new_target_pose[:3, :3] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_matrix()
+
+                current_joints = agent(model, data).all_joint_pos.copy()
+                target_joints = kinematics.ik_pose(pose=new_target_pose, q0=current_joints)
+                if np.allclose(target_joints, current_joints, atol=1e-4):
+                    update_controller = False
+                
+                g_context.target_pose = new_target_pose
+
             if update_controller:
                 controller.set_goal(target_joints, model, data)
                 controller(model, data)
