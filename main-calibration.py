@@ -108,6 +108,7 @@ class Context:
 
         self.dirty_next_model: bool = False  # Whether or not to load next model in category
         self.dirty_reload: bool = False  # Whether or not to reload the current model
+        self.dirty_robot_home: bool = False
         
         self.use_table: bool = False
         self.use_item: bool = True
@@ -160,6 +161,9 @@ def callback(keycode) -> None:
             f"Reloading current model: {g_context.instances_per_category[g_context.index_in_category]}"
         )
         g_context.dirty_reload = True
+    elif chr(keycode) == "R":
+        print(f"Reset robot to home pose")
+        g_context.dirty_robot_home = True
     elif chr(keycode) == "H":
         next_mode = "Rotation" if g_context.is_translation_mode else "Translation"
         print(f"Changing to {next_mode} mode")
@@ -881,6 +885,30 @@ def main() -> int:
 
     with mjviewer.launch_passive(model, data, key_callback=callback, show_left_ui=SHOW_LEFT_UI, show_right_ui=SHOW_RIGHT_UI) as viewer:
         while viewer.is_running():
+            if g_context.dirty_robot_home:
+                g_context.dirty_robot_home = False
+
+                controller.set_goal(agent.INIT_JOINT_POS, model, data)
+                controller(model, data)
+
+                data.qpos[:6] = agent.INIT_JOINT_POS[:6]
+                data.qvel[:6] = np.zeros(6)
+
+                mj.mj_step(model, data)
+
+                g_context.target_pose = agent(model, data).ee_pose_from_base.copy()
+                g_context.target_pos_x = g_context.target_pose[0, 3].item()
+                g_context.target_pos_y = g_context.target_pose[1, 3].item()
+                g_context.target_pos_z = g_context.target_pose[2, 3].item()
+
+                roll, pitch, yaw = R.from_matrix(g_context.target_pose[:3, :3]).as_euler("xyz")
+                g_context.target_ee_roll = roll
+                g_context.target_ee_pitch = pitch
+                g_context.target_ee_yaw = yaw
+
+                data.mocap_pos[0] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
+                data.mocap_quat[0] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_quat(scalar_first=True)
+
             if g_context.dirty_next_model or g_context.dirty_reload:
                 # Load the next model into the simulation -----------------------------------
                 g_context.dirty_next_model = False
