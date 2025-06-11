@@ -22,6 +22,7 @@ class JointPosController(Controller):
         max_time_ms: float = 5000,  # ms
         namespace: str = "robot_0/",
         simulate_for_fixed_time: bool = False,
+        verbose: bool = False,
     ):
         super().__init__(max_time_ms, cpp)
         self.namespace = namespace
@@ -38,6 +39,8 @@ class JointPosController(Controller):
         self._prev_joints = None
         self.simulate_for_fixed_time = simulate_for_fixed_time
         self._arm_err = np.zeros(len(actuator_names))
+
+        self.verbose = verbose
 
         # actuators
         self.actuator_names = actuator_names
@@ -116,7 +119,8 @@ class JointPosController(Controller):
         time = 0.0
         for _ in range(self.max_n_steps):
             if goal_reached and not self.simulate_for_fixed_time:
-                print(f"[{self.__class__.__name__}] Goal Reached")
+                if self.verbose:
+                    print(f"[{self.__class__.__name__}] Goal Reached")
                 break
 
             # compute control inputs
@@ -206,7 +210,8 @@ class JointPosController(Controller):
         _dir = np.sign(delta_arm)
         if self._dir is not None:
             if not (_dir[self._action_dim] == self._dir[self._action_dim]).any():
-                print(f"Direction change detected {delta_arm_err[self._action_dim]}")
+                if self.verbose:
+                    print(f"Direction change detected {delta_arm_err[self._action_dim]}")
                 return True
         self._dir = _dir
 

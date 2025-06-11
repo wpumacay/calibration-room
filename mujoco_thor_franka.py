@@ -47,8 +47,8 @@ class FrankaFR3Agent(Agent):
     def __init__(self, model: MjModel, namespace: str = "robot_0/"):
         super().__init__(model)
         self.namespace = namespace
-        self._grasp_site_id = model.site(f"{self.namespace}grasp_site").id
-        self._base_id = model.body(f"{self.namespace}base_link").id
+        self._grasp_site_id = model.site(f"{self.namespace}attachment_site").id
+        self._base_id = model.body(f"{self.namespace}base").id
         self._root_id = model.body_rootid[self._base_id].item()
 
         self._set_joint_names(model)

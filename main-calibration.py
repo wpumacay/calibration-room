@@ -710,6 +710,15 @@ def wrap_ee_to_joint(
     if np.allclose(target_joints, current_joints, atol=1e-4):
         return current_joints, gripper_control, False
 
+    g_context.target_pos_x = new_target_pose[0, 3]
+    g_context.target_pos_y = new_target_pose[1, 3]
+    g_context.target_pos_z = new_target_pose[2, 3]
+
+    ee_angles = R.from_matrix(new_target_pose[:3, :3]).as_euler("xyz")
+    g_context.target_ee_roll = ee_angles[0]
+    g_context.target_ee_pitch = ee_angles[1]
+    g_context.target_ee_yaw = ee_angles[2]
+
     g_context.target_pose = new_target_pose
     return target_joints, gripper_control, True
 
@@ -966,9 +975,9 @@ def main() -> int:
                 controller(model, data)
             agent.set_gripper_ctrl(data, gripper_control)
 
-            # data.mocap_pos[0] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
-            # data.mocap_quat[0] = R.from_matrix(new_target_pose[:3, :3]).as_quat(scalar_first=True)
-            # # print(f"quat: {R.from_matrix(new_target_pose[:3, :3]).as_quat(scalar_first=True)}")
+            data.mocap_pos[0] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
+            data.mocap_quat[0] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_quat(scalar_first=True)
+            # print(f"quat: {R.from_matrix(new_target_pose[:3, :3]).as_quat(scalar_first=True)}")
 
             # # Update the end effector task target from the mocap body
             # T_wt = mink.SE3.from_mocap_name(model, data, "target")
