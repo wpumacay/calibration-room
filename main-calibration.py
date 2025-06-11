@@ -116,11 +116,13 @@ class Context:
         self.target_pos_y = 0.0
         self.target_pos_z = 0.5
 
-        self.target_ee_roll = 0.0
+        self.target_ee_roll = np.pi
         self.target_ee_pitch = 0.0
         self.target_ee_yaw = 0.0
 
         self.gripper_state = 1
+
+        self.is_translation_mode = True
 
 
 g_context: Context = Context()
@@ -144,6 +146,10 @@ def callback(keycode) -> None:
             f"Reloading current model: {g_context.instances_per_category[g_context.index_in_category]}"
         )
         g_context.dirty_reload = True
+    elif chr(keycode) == "H":
+        next_mode = "Rotation" if g_context.is_translation_mode else "Translation"
+        print(f"Changing to {next_mode} mode")
+        g_context.is_translation_mode = not g_context.is_translation_mode
     elif chr(keycode) == "ć":
         print("Moving end effector to the left")
         g_context.target_pos_x -= g_context.ee_step_size_x
@@ -156,10 +162,35 @@ def callback(keycode) -> None:
     elif chr(keycode) == "Ĉ":
         print("Moving end effector backward")
         g_context.target_pos_y -= g_context.ee_step_size_y
+    elif chr(keycode) == ";":
+        print("Moving end effector up")
+        g_context.target_pos_z += g_context.ee_step_size_z
+    elif chr(keycode) == "'":
+        print("Moving end effector down")
+        g_context.target_pos_z -= g_context.ee_step_size_z
     elif chr(keycode) == "G":
         action = "Closing" if g_context.gripper_state == 1 else "Opening"
         print(f"{action} gripper")
         g_context.gripper_state = 1 - g_context.gripper_state
+    elif chr(keycode) == "V":
+        print("(+) Roll rotation for the gripper")
+        g_context.target_ee_roll += 0.05
+    elif chr(keycode) == ",":
+        print("(-) Roll rotation for the gripper")
+        g_context.target_ee_roll -= 0.05
+    elif chr(keycode) == "B":
+        print("(+) Pitch rotation for the gripper")
+        g_context.target_ee_pitch += 0.05
+    elif chr(keycode) == ".":
+        print("(-) Pitch rotation for the gripper")
+        g_context.target_ee_pitch -= 0.05
+    elif chr(keycode) == "N":
+        print("(+) Yaw rotation for the gripper")
+        g_context.target_ee_yaw += 0.05
+    elif chr(keycode) == "/":
+        print("(-) Yaw rotation for the gripper")
+        g_context.target_ee_yaw -= 0.05
+
 
 
 def get_instances_per_category(category: str) -> List[Path]:
@@ -813,8 +844,8 @@ def main() -> int:
             # g_context.target_pos_y += dy
             # g_context.target_pos_z += dz
 
-            dx, dy, dz = spacemouse.control[:3] * 0.001
-            droll, dpitch, dyaw = spacemouse.control[3:] * 0.01
+            dx, dy, dz = spacemouse.control[:3] * 0.001 * (1.0 if g_context.is_translation_mode else 0.0)
+            droll, dpitch, dyaw = spacemouse.control[3:] * 0.01 * (0.0 if g_context.is_translation_mode else 1.0)
             drot = R.from_euler("xyz", [droll, dpitch, dyaw]).as_matrix()
 
             delta_tf_pos = np.eye(4)
