@@ -140,6 +140,8 @@ class Context:
 
         self.gripper_state = 1
 
+        self.input_device = InputDevice.KEYBOARD
+
 
 g_context: Context = Context()
 
@@ -742,6 +744,7 @@ def main() -> int:
     global g_context
     global EMPTY_SCENE_PATH
     global ROBOT_ID_TO_PATH
+    global SPACEMOUSE_WORKING
     g_context.robot_id = args.robot
     g_context.category_id = args.category
 
@@ -781,12 +784,16 @@ def main() -> int:
     g_context.num_items_in_category = len(g_context.instances_per_category)
     g_context.use_table = not args.notable
 
+    # Check if we have access to a spacemouse ----------------------------------
     try:
         spacemouse = SpaceMouse() if SPACEMOUSE_WORKING else None
     except ValueError:
+        SPACEMOUSE_WORKING = False
         spacemouse = None
     if spacemouse:
+        g_context.input_device = InputDevice.SPACEMOUSE
         spacemouse.start_control()
+    # --------------------------------------------------------------------------
 
     print(f"Loading model category: {g_context.category_id}")
     print(f"Index in category: {g_context.index_in_category}")
@@ -875,7 +882,7 @@ def main() -> int:
                 data.mocap_quat[0] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_quat(scalar_first=True)
 
             if g_context.dirty_next_model or g_context.dirty_reload:
-                # Load the next model into the simulation -----------------------------------
+                # Load the next model into the simulation ----------------------
                 g_context.dirty_next_model = False
                 g_context.dirty_reload = False
                 model, data = load_scene(
@@ -928,7 +935,7 @@ def main() -> int:
 
                 mj.mj_forward(model, data)
                 viewer.sync()
-                # ---------------------------------------------------------------------------
+                # --------------------------------------------------------------
 
             # camera = viewer.cam
             # print(f"pos: {camera.lookat}")
@@ -936,9 +943,11 @@ def main() -> int:
             # print(f"azimuth: {camera.azimuth}")
             # print(f"elevation: {camera.elevation}")
 
-            if spacemouse is not None:
+            # Handle IK based on input device ----------------------------------
+            if g_context.input_device == InputDevice.SPACEMOUSE:
+                assert spacemouse is not None
                 target_joints, gripper_control, update_controller = wrap_ee_to_joint(agent, kinematics, spacemouse.control, spacemouse.gripper)
-            else:
+            elif g_context.input_device ==InputDevice.KEYBOARD:
                 gripper_control = 255.0 * g_context.gripper_state
                 update_controller = True
 
@@ -952,6 +961,13 @@ def main() -> int:
                     update_controller = False
                 
                 g_context.target_pose = new_target_pose
+            elif g_context.input_device == InputDevice.GAMEPAD:
+                # TODO(wilbert): handle gamepad-based updates here
+                update_controller = False
+                gripper_control = 255.0 * g_context.gripper_state
+            else:
+                update_controller = False
+                gripper_control = 255.0 * g_context.gripper_state
 
             if update_controller:
                 controller.set_goal(target_joints, model, data)
@@ -960,8 +976,9 @@ def main() -> int:
 
             data.mocap_pos[0] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
             data.mocap_quat[0] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_quat(scalar_first=True)
+            # ------------------------------------------------------------------
 
-            # Update the model parameters from the GUI -------------------------------------------------------
+            # Update the model parameters from the GUI -------------------------
             if not args.nogui:
                 if var_jnt_id.value != -1:
                     jnt_id = var_jnt_id.value
@@ -979,7 +996,7 @@ def main() -> int:
                             data.qvel[jnt_dof_adr] = 0.0
                         else:
                             joints_info[jnt_id].jnt_mpvar_qpos.value = data.qpos[jnt_qpos_adr]
-            # ------------------------------------------------------------------------------------------------
+            # ------------------------------------------------------------------
 
             mj.mj_step(model, data)
             viewer.sync()
