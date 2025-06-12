@@ -63,8 +63,18 @@ ROBOT_ID_TO_PATH = {
 }
 # ----------------------------------------------------------------------------------------------------------
 
+CATEGORIES_NAMES = [
+    "Microwave",
+    "Dresser",
+    "Light_Switch",
+    "Toilet",
+    "Book",
+    "Shelving_Unit",
+    "Side_Table",
+]
+
 CATEGORY_ID_TO_POSITION = {
-    "Fridge": [0, -0.95, 0.75],
+    # "Fridge": [0, -0.95, 0.75],
     "Microwave": [0, -0.95, 0.75],
     "Dresser": [0, -0.95, 0.75],
     "Light_Switch": [0, -0.95, 0.75],
@@ -75,9 +85,14 @@ CATEGORY_ID_TO_POSITION = {
 }
 
 CATEGORY_ID_TO_EULER = {
-    "Fridge": [1.57, 0, 3.14],
+    # "Fridge": [1.57, 0, 3.14],
     "Microwave": [1.57, 0, 3.14],
     "Dresser": [1.57, 0, 3.14],
+    "Light_Switch": [1.57, 0, 3.14],
+    "Toilet": [1.57, 0, 3.14],
+    "Book": [1.57, 0, 3.14],
+    "Shelving_Unit": [1.57, 0, 3.14],
+    "Side_Table": [1.57, 0, 3.14],
 }
 
 # Default home keyframe for franka-fr3 arm
@@ -86,12 +101,6 @@ ROBOT_HOME = {
     "qvel": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     "ctrl": [0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853, 0.0],
 }
-
-# IK parameters
-SOLVER = "quadprog"
-POS_THRESHOLD = 1e-4
-ORI_THRESHOLD = 1e-4
-MAX_ITERS = 20
 
 class InputDevice(Enum):
     KEYBOARD = 0
@@ -124,7 +133,6 @@ class Context:
         self.ee_step_size_z = 0.01
 
         self.timestep = 0.002
-        self.ik_max_iters = MAX_ITERS
 
         self.assets_dir = ASSETS_DIR
 
@@ -211,8 +219,8 @@ def callback(keycode) -> None:
 
 
 def get_instances_per_category(category: str) -> List[Path]:
+    global g_context
     base_path = str((g_context.assets_dir / "ThorAssets").resolve())
-    print(f"Looking for models in this folder: {base_path}")
     path_candidates = [Path(path) for path in glob.glob(f"{base_path}/**/*.xml", recursive=True)]
     pattern = re.compile(category + r"_\d+")
     instances = []
@@ -579,7 +587,13 @@ def run_imgui_interface(
     imgui_renderer.shutdown()
     glfw.terminate()
 
-def run_launcher_interface(lock: LockType):
+def run_launcher_interface(
+        categories: Dict[str, List[Path]],
+        var_category_id: Synchronized,
+        var_item_id: Synchronized,
+        var_model_change: Synchronized,
+        lock: LockType
+    ):
     if not glfw.init():
         print("Couldn't initialize GLFW")
         return
@@ -602,6 +616,13 @@ def run_launcher_interface(lock: LockType):
     imgui.create_context()
     imgui_renderer = GlfwRenderer(window)
 
+    categories_names = list(categories.keys())
+    category_selected = 0
+
+    items_paths = categories[categories_names[category_selected]]
+    items_names = [item_path.stem for item_path in items_paths]
+    item_selected = 0
+
     while not glfw.window_should_close(window):
         glfw.poll_events()
         imgui_renderer.process_inputs()
@@ -610,8 +631,33 @@ def run_launcher_interface(lock: LockType):
         # GUI creation goes here -----------------------------------------------
 
         # Combo-box used to select which joint to configure
-        with imgui.begin("Model Selection"):
-            pass
+        with imgui.begin("Launcher options"):
+            if len(categories_names) > 0:
+                with imgui.begin_combo("Category", categories_names[category_selected]) as combo:
+                    if combo.opened:
+                        for i, category_name in enumerate(categories_names):
+                            is_selected = (i == category_selected)
+                            if imgui.selectable(category_name, is_selected)[0]:
+                                category_selected = i
+                                with lock:
+                                    var_category_id.value = category_selected
+
+                            if is_selected:
+                                imgui.set_item_default_focus()
+                items_paths = categories[categories_names[category_selected]]
+                items_names = [item_path.stem for item_path in items_paths]
+                with imgui.begin_combo("Item", items_names[item_selected]) as combo:
+                    if combo.opened:
+                        for i, item_name in enumerate(items_names):
+                            is_selected = (i == item_selected)
+                            if imgui.selectable(item_name, is_selected)[0]:
+                                item_selected = i
+                                with lock:
+                                    var_item_id.value = item_selected
+                                    
+                if imgui.button("Load model"):
+                    with lock:
+                        var_model_change.value = 1
 
         # ----------------------------------------------------------------------
 
@@ -657,10 +703,13 @@ def load_joints(model: mj.MjModel, data: mj.MjData) -> Dict[int, JointInfo]:
         joints_info[jnt_info.jnt_id] = jnt_info
     return joints_info
 
-def load_valid_categories(assets_path: Path) -> List[str]:
-    valid_categories = []
+def load_categories() -> Dict[str, List[Path]]:
+    global g_context
+    global CATEGORIES_NAMES
+    valid_categories = {category: [] for category in CATEGORIES_NAMES}
 
-    # breakpoint()
+    for category in valid_categories.keys():
+        valid_categories[category] = get_instances_per_category(category)
 
     return valid_categories
 
@@ -729,7 +778,7 @@ def main() -> int:
         help="Whether or not to launch the GUI for parameter tunning",
     )
     parser.add_argument(
-        "--launcher",
+        "--nolauncher",
         action="store_true",
         help="Whether or not to launch the model selector GUI",
     )
@@ -758,7 +807,6 @@ def main() -> int:
             g_context.ee_step_size_y = config_data.get("ee_step_size_y", 0.01)
             g_context.ee_step_size_z = config_data.get("ee_step_size_z", 0.01)
             g_context.timestep = config_data.get("timestep", 0.002)
-            g_context.ik_max_iters = config_data.get("ik_max_iters", 20)
             config_assets_dir = config_data.get("assets_dir", "")
             if config_assets_dir != "":
                 g_context.assets_dir = Path(config_assets_dir)
@@ -810,6 +858,9 @@ def main() -> int:
 
     var_jnt_id = Value('i', -1)
     var_jnt_qpos_change = Value('i', 0)
+    var_category_id = Value('i', -1)
+    var_item_id = Value('i', -1)
+    var_model_change = Value('i', 0)
     lock = Lock()
 
     joints_info: Dict[int, JointInfo] = load_joints(model, data)
@@ -818,10 +869,10 @@ def main() -> int:
         gui_process = Process(target=run_imgui_interface, args=(var_jnt_id, var_jnt_qpos_change, joints_info, lock))
         gui_process.start()
 
-    categories_info: List[str] = load_valid_categories(g_context.assets_dir)
+    categories_info: Dict[str, List[Path]] = load_categories()
     launcher_process = None
-    if args.launcher:
-        launcher_process = Process(target=run_launcher_interface, args=(lock,))
+    if not args.nolauncher:
+        launcher_process = Process(target=run_launcher_interface, args=(categories_info, var_category_id, var_item_id, var_model_change, lock,))
         launcher_process.start()
 
     agent = FrankaFR3Agent(model=model, namespace="robot-")
