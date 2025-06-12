@@ -3,6 +3,7 @@ import glob
 import json
 import re
 import multiprocessing
+from enum import Enum
 from multiprocessing import Process, Value, Lock
 from multiprocessing.sharedctypes import Synchronized
 from multiprocessing.synchronize import Lock as LockType
@@ -19,8 +20,6 @@ from scipy.spatial.transform import Rotation as R
 
 import mujoco as mj
 import mujoco.viewer as mjviewer
-
-# import mink
 
 SPACEMOUSE_WORKING = True
 try:
@@ -94,6 +93,10 @@ POS_THRESHOLD = 1e-4
 ORI_THRESHOLD = 1e-4
 MAX_ITERS = 20
 
+class InputDevice(Enum):
+    KEYBOARD = 0
+    GAMEPAD = 1
+    SPACEMOUSE = 2
 
 class Context:
     def __init__(self):
@@ -137,8 +140,6 @@ class Context:
 
         self.gripper_state = 1
 
-        self.is_translation_mode = True
-
 
 g_context: Context = Context()
 
@@ -164,10 +165,6 @@ def callback(keycode) -> None:
     elif chr(keycode) == "R":
         print(f"Reset robot to home pose")
         g_context.dirty_robot_home = True
-    elif chr(keycode) == "H":
-        next_mode = "Rotation" if g_context.is_translation_mode else "Translation"
-        print(f"Changing to {next_mode} mode")
-        g_context.is_translation_mode = not g_context.is_translation_mode
     elif chr(keycode) == "ć":
         print("Moving end effector to the left")
         g_context.target_pos_x -= g_context.ee_step_size_x
@@ -665,27 +662,6 @@ def load_valid_categories(assets_path: Path) -> List[str]:
 
     return valid_categories
 
-# def converge_ik(
-#     configuration, tasks, dt, solver, pos_threshold, ori_threshold, max_iters
-# ):
-#     """
-#     Runs up to 'max_iters' of IK steps. Returns True if position and orientation
-#     are below thresholds, otherwise False.
-#     """
-#     for i in range(max_iters):
-#         vel = mink.solve_ik(configuration, tasks, dt, solver, 1e-3)
-#         configuration.integrate_inplace(vel, dt)
-
-#         # Only checking the first FrameTask here (end_effector_task).
-#         # If you want to check multiple tasks, sum or combine their errors.
-#         err = tasks[0].compute_error(configuration)
-#         pos_achieved = np.linalg.norm(err[:3]) <= pos_threshold
-#         ori_achieved = np.linalg.norm(err[3:]) <= ori_threshold
-
-#         if pos_achieved and ori_achieved:
-#             return True
-#     return False
-
 def wrap_ee_to_joint(
     agent: Agent,
     kinematics: MujocoKinematics,
@@ -866,21 +842,6 @@ def main() -> int:
     controller.set_goal(agent.INIT_JOINT_POS, model, data)
     g_context.target_pose = agent(model, data).ee_pose_from_base.copy()
 
-    # configuration = mink.Configuration(model)
-    # end_effector_task = mink.FrameTask(
-    #     frame_name="robot-attachment_site",
-    #     frame_type="site",
-    #     position_cost=1.0,
-    #     orientation_cost=1.0,
-    #     lm_damping=1.0,
-    # )
-    # posture_task = mink.PostureTask(model=model, cost=1e-2)
-    # tasks = [end_effector_task, posture_task]
-
-    # configuration.update(data.qpos)
-    # posture_task.set_target_from_configuration(configuration)
-    # mink.move_mocap_to_frame(model, data, "target", "robot-attachment_site", "site")
-
     mj.mj_forward(model, data)
 
     with mjviewer.launch_passive(model, data, key_callback=callback, show_left_ui=SHOW_LEFT_UI, show_right_ui=SHOW_RIGHT_UI) as viewer:
@@ -953,22 +914,6 @@ def main() -> int:
                 controller.set_goal(agent.INIT_JOINT_POS, model, data)
                 g_context.target_pose = agent(model, data).ee_pose_from_base.copy()
 
-                # configuration = mink.Configuration(model)
-                # end_effector_task = mink.FrameTask(
-                #     frame_name="robot-attachment_site",
-                #     frame_type="site",
-                #     position_cost=1.0,
-                #     orientation_cost=1.0,
-                #     lm_damping=1.0,
-                # )
-                # posture_task = mink.PostureTask(model=model, cost=1e-2)
-                # tasks = [end_effector_task, posture_task]
-
-                # configuration.update(data.qpos)
-                # posture_task.set_target_from_configuration(configuration)
-                # mink.move_mocap_to_frame(model, data, "target", "robot-attachment_site", "site")
-                # mj.mj_forward(model, data)
-
                 if not args.nogui:
                     if gui_process is not None and gui_process.is_alive():
                         gui_process.kill()
@@ -984,30 +929,6 @@ def main() -> int:
                 mj.mj_forward(model, data)
                 viewer.sync()
                 # ---------------------------------------------------------------------------
-
-            # dx, dy, dz = spacemouse.control[:3] * 0.001 * (1.0 if g_context.is_translation_mode else 0.0)
-            # droll, dpitch, dyaw = spacemouse.control[3:] * 0.01 * (0.0 if g_context.is_translation_mode else 1.0)
-            # drot = R.from_euler("xyz", [droll, dpitch, dyaw]).as_matrix()
-
-            # delta_tf_pos = np.eye(4)
-            # delta_tf_pos[:3, 3] = [dx, dy, dz]
-
-            # delta_tf_rot = np.eye(4)
-            # delta_tf_rot[:3, :3] = drot
-
-            # current_target_pose = np.eye(4)
-            # current_target_pose[:3, 3] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
-            # current_target_pose[:3, :3] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_matrix()
-
-            # new_target_pose = (delta_tf_pos @ current_target_pose) @ delta_tf_rot
-            # g_context.target_pos_x = new_target_pose[0, 3]
-            # g_context.target_pos_y = new_target_pose[1, 3]
-            # g_context.target_pos_z = new_target_pose[2, 3]
-
-            # ee_angles = R.from_matrix(new_target_pose[:3, :3]).as_euler("xyz")
-            # g_context.target_ee_roll = ee_angles[0]
-            # g_context.target_ee_pitch = ee_angles[1]
-            # g_context.target_ee_yaw = ee_angles[2]
 
             # camera = viewer.cam
             # print(f"pos: {camera.lookat}")
@@ -1039,26 +960,6 @@ def main() -> int:
 
             data.mocap_pos[0] = [g_context.target_pos_x, g_context.target_pos_y, g_context.target_pos_z]
             data.mocap_quat[0] = R.from_euler("xyz", [g_context.target_ee_roll, g_context.target_ee_pitch, g_context.target_ee_yaw]).as_quat(scalar_first=True)
-            # print(f"quat: {R.from_matrix(new_target_pose[:3, :3]).as_quat(scalar_first=True)}")
-
-            # # Update the end effector task target from the mocap body
-            # T_wt = mink.SE3.from_mocap_name(model, data, "target")
-            # end_effector_task.set_target(T_wt)
-
-            # # Attempt to converge IK
-            # converge_ik(
-            #     configuration,
-            #     tasks,
-            #     g_context.timestep,
-            #     SOLVER,
-            #     POS_THRESHOLD,
-            #     ORI_THRESHOLD,
-            #     g_context.ik_max_iters,
-            # )
- 
-            # # Set robot controls (first 8 dofs in your configuration)
-            # data.ctrl[:7] = configuration.q[:7]
-            # data.ctrl[7] = 255. * g_context.gripper_state
 
             # Update the model parameters from the GUI -------------------------------------------------------
             if not args.nogui:
