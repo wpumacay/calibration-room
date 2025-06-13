@@ -858,8 +858,8 @@ def main() -> int:
 
     var_jnt_id = Value('i', -1)
     var_jnt_qpos_change = Value('i', 0)
-    var_category_id = Value('i', -1)
-    var_item_id = Value('i', -1)
+    var_category_id = Value('i', 0)
+    var_item_id = Value('i', 0)
     var_model_change = Value('i', 0)
     lock = Lock()
 
@@ -1047,6 +1047,22 @@ def main() -> int:
                             data.qvel[jnt_dof_adr] = 0.0
                         else:
                             joints_info[jnt_id].jnt_mpvar_qpos.value = data.qpos[jnt_qpos_adr]
+
+            # ------------------------------------------------------------------
+
+            # Check whether or not the user wants to reload --------------------
+            if not args.nolauncher:
+                if var_model_change.value == 1:
+                    with lock:
+                        var_model_change.value = 0
+                        if var_category_id.value != -1 and var_item_id.value != -1:
+                            categories_names = list(categories_info.keys())
+                            category_name = categories_names[var_category_id.value]
+
+                            g_context.dirty_next_model = True
+                            g_context.category_id = category_name
+                            g_context.index_in_category = var_item_id.value
+                            g_context.instances_per_category = categories_info[category_name]
             # ------------------------------------------------------------------
 
             mj.mj_step(model, data)
