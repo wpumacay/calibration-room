@@ -150,6 +150,9 @@ class Context:
 
         self.input_device = InputDevice.KEYBOARD
 
+        self.spacemouse_translation_sensitivity = 0.001
+        self.spacemouse_rotation_sensitivity = 0.001
+
 
 g_context: Context = Context()
 
@@ -596,6 +599,9 @@ def run_launcher_interface(
         var_item_id: Synchronized,
         var_model_change: Synchronized,
         var_robot_home: Synchronized,
+        var_spacemouse_trans_sens: Synchronized,
+        var_spacemouse_rot_sens: Synchronized,
+        var_spacemouse_sens_change: Synchronized,
         lock: LockType
     ):
     if not glfw.init():
@@ -676,6 +682,30 @@ def run_launcher_interface(
                 with lock:
                     var_robot_home.value = 1
 
+            imgui.spacing()
+            imgui.text("Controls options")
+            changed, trans_sens_value = imgui.slider_float(
+                "Translation Sensitivity",
+                var_spacemouse_trans_sens.value,
+                0.001,
+                0.01,
+            )
+            if changed:
+                with lock:
+                    var_spacemouse_sens_change.value = 1
+                    var_spacemouse_trans_sens.value = trans_sens_value
+            
+            changed, rot_sens_value = imgui.slider_float(
+                "Rotation Sensitivity",
+                var_spacemouse_rot_sens.value,
+                0.001,
+                0.01,
+            )
+            if changed:
+                with lock:
+                    var_spacemouse_sens_change.value = 1
+                    var_spacemouse_rot_sens.value = rot_sens_value
+
         # ----------------------------------------------------------------------
 
         imgui.render()
@@ -745,13 +775,13 @@ def wrap_ee_to_joint(
     if np.all(np.abs(joint_control) < 0.5):
         return current_joints, gripper_control, False
 
-    dx, dy, dz = joint_control[:3] * 0.001
-    droll, dpitch, dyaw = joint_control[3:] * 0.001
+    dy, dx, dz = joint_control[:3] * g_context.spacemouse_translation_sensitivity
+    droll, dpitch, dyaw = joint_control[3:] * g_context.spacemouse_rotation_sensitivity
 
     drot = R.from_euler("xyz", [droll, dpitch, dyaw]).as_matrix()
 
     delta_transform_pos = np.eye(4)
-    delta_transform_pos[:3, 3] = [dx, dy, dz]
+    delta_transform_pos[:3, 3] = [dx, -dy, dz]
 
     delta_transform_rot = np.eye(4)
     delta_transform_rot[:3, :3] = drot
@@ -879,6 +909,9 @@ def main() -> int:
     var_item_id = Value('i', 0)
     var_model_change = Value('i', 0)
     var_robot_home = Value('i', 0)
+    var_spacemouse_trans_sens = Value('d', g_context.spacemouse_translation_sensitivity)
+    var_spacemouse_rot_sens = Value('d', g_context.spacemouse_rotation_sensitivity)
+    var_spacemouse_sens_change = Value('i', 0)
     lock = Lock()
 
     joints_info: Dict[int, JointInfo] = load_joints(model, data)
@@ -890,7 +923,20 @@ def main() -> int:
     categories_info: Dict[str, List[Path]] = load_categories()
     launcher_process = None
     if not args.nolauncher:
-        launcher_process = Process(target=run_launcher_interface, args=(categories_info, var_category_id, var_item_id, var_model_change, var_robot_home, lock,))
+        launcher_process = Process(
+            target=run_launcher_interface,
+            args=(
+                categories_info,
+                var_category_id,
+                var_item_id,
+                var_model_change,
+                var_robot_home,
+                var_spacemouse_trans_sens,
+                var_spacemouse_rot_sens,
+                var_spacemouse_sens_change,
+                lock,
+            )
+        )
         launcher_process.start()
 
     agent = FrankaFR3Agent(model=model, namespace="robot-")
@@ -1090,6 +1136,11 @@ def main() -> int:
                     with lock:
                         var_robot_home.value = 0
                         g_context.dirty_robot_home = True
+                if var_spacemouse_sens_change.value == 1:
+                    with lock:
+                        var_spacemouse_sens_change.value = 0
+                        g_context.spacemouse_translation_sensitivity = var_spacemouse_trans_sens.value
+                        g_context.spacemouse_rotation_sensitivity = var_spacemouse_rot_sens.value               
             # ------------------------------------------------------------------
 
             mj.mj_step(model, data)
