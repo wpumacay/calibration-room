@@ -177,16 +177,16 @@ def callback(keycode) -> None:
         g_context.dirty_robot_home = True
     elif chr(keycode) == "ć":
         print("Moving end effector to the left")
-        g_context.target_pos_x -= g_context.ee_step_size_x
+        g_context.target_pos_x += g_context.ee_step_size_x
     elif chr(keycode) == "Ć":
         print("Moving end effector to the right")
-        g_context.target_pos_x += g_context.ee_step_size_x
+        g_context.target_pos_x -= g_context.ee_step_size_x
     elif chr(keycode) == "ĉ":
         print("Moving end effector forward")
-        g_context.target_pos_y += g_context.ee_step_size_y
+        g_context.target_pos_y -= g_context.ee_step_size_y
     elif chr(keycode) == "Ĉ":
         print("Moving end effector backward")
-        g_context.target_pos_y -= g_context.ee_step_size_y
+        g_context.target_pos_y += g_context.ee_step_size_y
     elif chr(keycode) == ";":
         print("Moving end effector up")
         g_context.target_pos_z += g_context.ee_step_size_z
