@@ -496,6 +496,9 @@ def run_imgui_interface(
         imgui.new_frame()
         # GUI creation goes here -----------------------------------------------
 
+        io = imgui.get_io()
+        imgui.set_next_window_position(0, 0)
+        imgui.set_next_window_size(io.display_size.x, io.display_size.y)
         # Combo-box used to select which joint to configure
         with imgui.begin("Simulation properties"):
             if len(joints_info) > 0:
@@ -592,6 +595,7 @@ def run_launcher_interface(
         var_category_id: Synchronized,
         var_item_id: Synchronized,
         var_model_change: Synchronized,
+        var_robot_home: Synchronized,
         lock: LockType
     ):
     if not glfw.init():
@@ -631,7 +635,12 @@ def run_launcher_interface(
         # GUI creation goes here -----------------------------------------------
 
         # Combo-box used to select which joint to configure
+        io = imgui.get_io()
+        imgui.set_next_window_position(0, 0)
+        imgui.set_next_window_size(io.display_size.x, io.display_size.y)
         with imgui.begin("Launcher options"):
+            imgui.text("Model options")
+            imgui.spacing()
             if len(categories_names) > 0:
                 with imgui.begin_combo("Category", categories_names[category_selected]) as combo:
                     if combo.opened:
@@ -658,6 +667,14 @@ def run_launcher_interface(
                 if imgui.button("Load model"):
                     with lock:
                         var_model_change.value = 1
+            else:
+                imgui.text("No models found, maybe setup was wrong")
+
+            imgui.spacing()
+            imgui.text("Simulation options")
+            if imgui.button("Robot Home"):
+                with lock:
+                    var_robot_home.value = 1
 
         # ----------------------------------------------------------------------
 
@@ -861,6 +878,7 @@ def main() -> int:
     var_category_id = Value('i', 0)
     var_item_id = Value('i', 0)
     var_model_change = Value('i', 0)
+    var_robot_home = Value('i', 0)
     lock = Lock()
 
     joints_info: Dict[int, JointInfo] = load_joints(model, data)
@@ -872,7 +890,7 @@ def main() -> int:
     categories_info: Dict[str, List[Path]] = load_categories()
     launcher_process = None
     if not args.nolauncher:
-        launcher_process = Process(target=run_launcher_interface, args=(categories_info, var_category_id, var_item_id, var_model_change, lock,))
+        launcher_process = Process(target=run_launcher_interface, args=(categories_info, var_category_id, var_item_id, var_model_change, var_robot_home, lock,))
         launcher_process.start()
 
     agent = FrankaFR3Agent(model=model, namespace="robot-")
@@ -943,6 +961,11 @@ def main() -> int:
                 if sim is not None:
                     sim.load(model, data, "Categories Visualizer")
                     viewer._user_scn = mj.MjvScene(model, sim.MAX_GEOM)
+
+                viewer.cam.lookat = [0.04764209, -0.02826854, 0.41072837]
+                viewer.cam.azimuth = -94.582
+                viewer.cam.elevation = -25.376
+                viewer.cam.distance = 1.311
 
                 g_context.model = model
                 g_context.data = data
@@ -1050,7 +1073,7 @@ def main() -> int:
 
             # ------------------------------------------------------------------
 
-            # Check whether or not the user wants to reload --------------------
+            # Check for the launcher GUI logic ---------------------------------
             if not args.nolauncher:
                 if var_model_change.value == 1:
                     with lock:
@@ -1063,6 +1086,10 @@ def main() -> int:
                             g_context.category_id = category_name
                             g_context.index_in_category = var_item_id.value
                             g_context.instances_per_category = categories_info[category_name]
+                if var_robot_home.value == 1:
+                    with lock:
+                        var_robot_home.value = 0
+                        g_context.dirty_robot_home = True
             # ------------------------------------------------------------------
 
             mj.mj_step(model, data)
