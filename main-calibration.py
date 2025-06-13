@@ -38,8 +38,8 @@ from mujoco_thor_joint_pos_controller import JointPosController
 CURRENT_DIR = Path(__file__).parent
 ASSETS_DIR = CURRENT_DIR / "assets"
 
-SHOW_LEFT_UI = False
-SHOW_RIGHT_UI = False
+SHOW_LEFT_UI = True
+SHOW_RIGHT_UI = True
 
 STR_DESC_STIFFNESS = """Joint stiffness. It represents how strong is the force
 of a spring added at the equilibrium position.
@@ -75,7 +75,7 @@ CATEGORIES_NAMES = [
 
 CATEGORY_ID_TO_POSITION = {
     # "Fridge": [0, -0.95, 0.75],
-    "Microwave": [0, -0.95, 0.75],
+    "Microwave": [0.95, 0.0, 0.75],
     "Dresser": [0, -0.95, 0.75],
     "Light_Switch": [0, -0.95, 0.75],
     "Toilet": [0, -0.95, 0.75],
@@ -86,7 +86,7 @@ CATEGORY_ID_TO_POSITION = {
 
 CATEGORY_ID_TO_EULER = {
     # "Fridge": [1.57, 0, 3.14],
-    "Microwave": [1.57, 0, 3.14],
+    "Microwave": [1.57, 0.0, -1.57],
     "Dresser": [1.57, 0, 3.14],
     "Light_Switch": [1.57, 0, 3.14],
     "Toilet": [1.57, 0, 3.14],
@@ -140,8 +140,8 @@ class Context:
         self.target_pos_y = 0.0
         self.target_pos_z = 0.5
 
-        self.target_ee_roll = np.pi
-        self.target_ee_pitch = 0.0
+        self.target_ee_roll = 0#2*np.pi
+        self.target_ee_pitch = np.pi/2
         self.target_ee_yaw = 0.0
 
         self.target_pose = np.eye(4)
@@ -427,7 +427,7 @@ def load_scene(
                 # print(f"asset-height: {asset_height}")
                 # print(f"diff-height: {diff_height}")
                 table_body = root_spec.worldbody.add_body(
-                    name="table", pos=[0, -1.0, diff_height / 4]
+                    name="table", pos=[1.0, 0.0, diff_height / 4]
                 )
                 table_body.add_geom(
                     type=mj.mjtGeom.mjGEOM_BOX,
